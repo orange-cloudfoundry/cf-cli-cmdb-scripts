@@ -24,8 +24,11 @@ EOF
         return 1
     fi
     MATCHING_SERVICE_INSTANCES=$(cf curl "/v3/service_instances?label_selector=backing_service_instance_guid==${SERVICE_GUID}")
+    # Jq does not properly allow controlling exit status, see https://github.com/stedolan/jq/issues/1142#issuecomment-372847390
+    # so we test the output explicitly
     if [[ -n $(echo "${MATCHING_SERVICE_INSTANCES}" | jq .resources[].metadata) ]];
     then
+        # Recompute the jq output to preserve color escapes
          echo "${MATCHING_SERVICE_INSTANCES}" | jq .resources[].metadata
          return 0
     else
