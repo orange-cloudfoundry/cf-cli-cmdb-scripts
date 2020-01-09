@@ -18,12 +18,20 @@ EOF
         printf "${USAGE}\n"
         return 1
     fi
-    local SERVICE_GUID
+    local SERVICE_GUID MATCHING_SERVICE_INSTANCES
     SERVICE_GUID=$(cf service ${SERVICE_NAME} --guid);
     if [[ $? -ne 0 ]]; then
         return 1
     fi
-    cf curl "/v3/service_instances?label_selector=backing_service_instance_guid==${SERVICE_GUID}" | jq .resources[].metadata ;
+    MATCHING_SERVICE_INSTANCES=$(cf curl "/v3/service_instances?label_selector=backing_service_instance_guid==${SERVICE_GUID}")
+    if [[ -n $(echo "${MATCHING_SERVICE_INSTANCES}" | jq .resources[].metadata) ]];
+    then
+         echo "${MATCHING_SERVICE_INSTANCES}" | jq .resources[].metadata
+         return 0
+    else
+        echo "No metadata defined for service ${SERVICE_NAME}"
+        return 1;
+    fi
 }
 export -f cf_labels_service
 
