@@ -70,7 +70,7 @@ EOF
          echo "${MATCHING_AUDIT_EVENTS}" | jq .
          return 0
     else
-        echo "No audit events defined for service ${SERVICE_GUID}"
+        echo "No audit events defined for service guid ${SERVICE_GUID}"
         return 1;
     fi
     #set +x
