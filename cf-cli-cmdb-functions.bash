@@ -141,21 +141,23 @@ EOF
 export -f cf_service_details
 
 # $1: selector
+# $2: optional --summary option
 function cf_services_from_selector() {
   #set -x
 
   local LABEL_SELECTOR=$1
+  local SUMMARY_OPTION=$2
   if [[ -z "${LABEL_SELECTOR}" || "${LABEL_SELECTOR}" == "-h" ]]; then
     read -r -d '' USAGE <<'EOF'
 NAME:
    cf_services_from_selector - List service instances from a selector expression
 
 USAGE:
-   cf_services_from_selector <selector expression>
+   cf_services_from_selector <selector expression> [ --summary ]
      see https://docs.cloudfoundry.org/adminguide/metadata.html#requirements-reference or extract below
 
 EXAMPLES:
-   cf_services_from_selector brokered_service_context_organization_guid==8ed390b9-8013-48d3-9669-2bddc308402a
+   cf_services_from_selector brokered_service_context_organization_guid==8ed390b9-8013-48d3-9669-2bddc308402a --summary
    cf_services_from_selector brokered_service_context_space_guid==b16cf265-0c97-4775-bd2a-29d9ffac20d1
    cf_services_from_selector brokered_service_originating_identity_user_id==5402eaf9-d7dd-4baf-83e5-12a741ad48aa
 
@@ -175,10 +177,12 @@ EOF
     return 1
   fi
 
-  local METADATAS_JSON=$(cf curl "/v3/service_instances?label_selector=${LABEL_SELECTOR}")
+  #Save current target to restore it afterwards
   local current_target=$(cf t)
   local current_space=$(echo "$current_target" | grep space: | awk '{print $2}')
   local current_org=$(echo "$current_target" | grep org: | awk '{print $2}')
+
+  local METADATAS_JSON=$(cf curl "/v3/service_instances?label_selector=${LABEL_SELECTOR}")
   # {
   #            "labels": {
   #               "brokered_service_instance_guid": "fe682093-d344-4251-862a-f31dee976012",
@@ -194,6 +198,21 @@ EOF
   #               "brokered_service_context_organization_name": "org-name"
   #            }
   # }
+
+  if [[ "$SUMMARY_OPTION" == "--summary" ]]; then
+     local column_width="36"
+     #See https://stackoverflow.com/a/12781750/1484823
+     local formatting="| %-${column_width}s | %-${column_width}s | %-${column_width}s | %-${column_width}s | \n"
+     printf "$formatting" "brokered_organization_name" "brokered_space_name" "brokered_instance_name" "backing_service_instance_guid"
+     printf "$formatting" "--------------------------" "-------------------" "----------------------" "-----------------------------"
+      # See https://stackoverflow.com/a/43192740/1484823
+     echo "$METADATAS_JSON" | jq -r '.resources[].metadata | [ .annotations.brokered_service_context_organization_name, .annotations.brokered_service_context_space_name, .annotations.brokered_service_context_instance_name, .labels.backing_service_instance_guid ] | @tsv' |
+          while IFS=$'\t' read -r brokered_space_name brokered_organization_name brokered_instance_name backing_service_instance_guid; do
+            printf "$formatting" "$brokered_organization_name" "$brokered_space_name" "$brokered_instance_name" "$backing_service_instance_guid"
+          done;
+    return 0
+  fi
+
   local MATCHING_GUIDS=$(echo $METADATAS_JSON | jq -r '.resources[].metadata | .labels.backing_service_instance_guid')
   for si in $MATCHING_GUIDS; do
     echo "---------------------------------------------------------------------"
@@ -202,7 +221,6 @@ EOF
     echo "metadata:"
     echo "$METADATAS_JSON" | jq -r ".resources[].metadata | select(.labels.backing_service_instance_guid==\"${si}\")"
     cf curl v2/service_instances/$si | jq -r '.entity | [ .name, .space_guid, .last_operation.state, .last_operation.created_at, .space_url, .service_plan_url ] | @tsv' |
-      # See https://stackoverflow.com/a/43192740/1484823
       while IFS=$'\t' read -r service_instance_name space_guid state created_at space_url service_plan_url; do
         #echo "service_instance_name=${service_instance_name} space_guid=${space_guid} state=${state} created_at=${created_at} space_url=${space_url} service_plan_url=${service_plan_url}"
         cf curl ${space_url} | jq -r '.entity | [ .name, .organization_guid, .organization_url ] | @tsv' |
