@@ -70,7 +70,7 @@ EOF
          echo "${MATCHING_AUDIT_EVENTS}" | jq .
          return 0
     else
-        echo "No audit events defined for service guid ${SERVICE_GUID}. Did they expire and were purged ? Check service instance status date."
+        echo "No audit events defined for service guid ${SERVICE_GUID}. Hint: did they expire and were purged ? Check service instance status date."
         return 1;
     fi
     #set +x
