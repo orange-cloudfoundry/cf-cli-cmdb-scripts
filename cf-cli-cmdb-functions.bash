@@ -147,18 +147,18 @@ export -f cf_service_details
 
 
 
-function display_org_space_hierarchy() {
+function cf_org_space_hierarchy() {
     local OPTION=$1;
     if [[ -n "${OPTION}" && "${OPTION}" != "--include-service-instances" || "${OPTION}" == "-h" ]]; then
         read -r -d '' USAGE <<'EOF'
 NAME:
-   display_org_space_hierarchy - Display an overview of the cmdb orgs and space as a tree
+   cf_org_space_hierarchy - Display an overview of the cmdb orgs and space as a tree
 
 USAGE:
-   display_org_space_hierarchy [ --include-service-instances ]
+   cf_org_space_hierarchy [ --include-service-instances ]
 
 EXAMPLES:
-   display_org_space_hierarchy
+   cf_org_space_hierarchy
 EOF
 
         printf "${USAGE}\n"
@@ -196,4 +196,28 @@ EOF
   cd ..
   rm -rf ascii-art-diagrams
 }
-export -f display_org_space_hierarchy
+export -f cf_org_space_hierarchy
+
+
+function cf_cmdb_cli_usage () {
+  read -r -d '' USAGE <<'EOF'
+NAME:
+   cf_cmdb_cli_usage - List osb-cmdb functions registered. Try each with -h to print usage
+
+USAGE:
+   cf_cmdb_cli_usage
+
+EXAMPLES:
+   cf_cmdb_cli_usage
+
+Registered functions:
+EOF
+
+    printf "${USAGE}\n"
+
+  local cmdb_functions="cf_audit_events_from_guid cf_audit_events_from_service_name cf_labels_service cf_service_details cf_org_space_hierarchy"
+  for f in $cmdb_functions; do
+   $f -h | grep -A1 "NAME:" | grep -v "NAME:"
+  done;
+}
+export -f cf_cmdb_cli_usage
