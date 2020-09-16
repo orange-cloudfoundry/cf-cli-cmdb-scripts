@@ -144,3 +144,56 @@ EOF
     echo
 }
 export -f cf_service_details
+
+
+
+function display_org_space_hierarchy() {
+    local OPTION=$1;
+    if [[ -n "${OPTION}" && "${OPTION}" != "--include-service-instances" || "${OPTION}" == "-h" ]]; then
+        read -r -d '' USAGE <<'EOF'
+NAME:
+   display_org_space_hierarchy - Display an overview of the cmdb orgs and space as a tree
+
+USAGE:
+   display_org_space_hierarchy [ --include-service-instances ]
+
+EXAMPLES:
+   display_org_space_hierarchy
+EOF
+
+        printf "${USAGE}\n"
+        return 1
+    fi
+  local DISPLAY_SERVICE_INSTANCES="false"
+  if [[ "${OPTION}" == "--include-service-instances" ]]; then
+    DISPLAY_SERVICE_INSTANCES="true"
+  fi
+
+  local top_dir="ascii-art-diagrams"
+  rm -rf ${top_dir}
+  local ORGS=$(cf orgs | grep cmdb | grep -v test)
+  for o in $ORGS; do
+    cf t -o $o > /dev/null;
+    local SPACES=$(cf spaces|tail -n +5);
+    local org_dir="$top_dir/$o"
+    mkdir -p $org_dir
+    for s in $SPACES; do
+      local space_dir="$org_dir/$s"
+      if [[ $DISPLAY_SERVICE_INSTANCES != "true" ]]; then
+        touch $space_dir  # render as a file to get a different color
+      else
+        mkdir -p $space_dir
+        cf t -o $o -s $s > /dev/null;
+        local SERVICES_INSTANCES=$(cf services | tail -n +4 | awk '{print $1}');
+        for si in $SERVICES_INSTANCES; do
+          touch $space_dir/${si}
+        done
+      fi
+    done
+  done
+  cd ascii-art-diagrams
+  tree
+  cd ..
+  rm -rf ascii-art-diagrams
+}
+export -f display_org_space_hierarchy
