@@ -131,12 +131,12 @@ EOF
     return 1
   fi
 
-    cf service $SERVICE_NAME
-    echo
-    cf_labels_service $SERVICE_NAME
-    echo
-    cf_audit_events_from_service_name $SERVICE_NAME
-    echo
+  cf service $SERVICE_NAME
+  echo
+  cf_labels_service $SERVICE_NAME
+  echo
+  cf_audit_events_from_service_name $SERVICE_NAME
+  echo
 }
 export -f cf_service_details
 
@@ -200,16 +200,16 @@ EOF
   # }
 
   if [[ "$SUMMARY_OPTION" == "--summary" ]]; then
-     local column_width="36"
-     #See https://stackoverflow.com/a/12781750/1484823
-     local formatting="| %-${column_width}s | %-${column_width}s | %-${column_width}s | %-${column_width}s | \n"
-     printf "$formatting" "brokered_organization_name" "brokered_space_name" "brokered_instance_name" "backing_service_instance_guid"
-     printf "$formatting" "--------------------------" "-------------------" "----------------------" "-----------------------------"
-      # See https://stackoverflow.com/a/43192740/1484823
-     echo "$METADATAS_JSON" | jq -r '.resources[].metadata | [ .annotations.brokered_service_context_organization_name, .annotations.brokered_service_context_space_name, .annotations.brokered_service_context_instance_name, .labels.backing_service_instance_guid ] | @tsv' |
-          while IFS=$'\t' read -r brokered_space_name brokered_organization_name brokered_instance_name backing_service_instance_guid; do
-            printf "$formatting" "$brokered_organization_name" "$brokered_space_name" "$brokered_instance_name" "$backing_service_instance_guid"
-          done;
+    local column_width="36"
+    #See https://stackoverflow.com/a/12781750/1484823
+    local formatting="| %-${column_width}s | %-${column_width}s | %-${column_width}s | %-${column_width}s | \n"
+    printf "$formatting" "brokered_organization_name" "brokered_space_name" "brokered_instance_name" "backing_service_instance_guid"
+    printf "$formatting" "--------------------------" "-------------------" "----------------------" "-----------------------------"
+    # See https://stackoverflow.com/a/43192740/1484823
+    echo "$METADATAS_JSON" | jq -r '.resources[].metadata | [ .annotations.brokered_service_context_organization_name, .annotations.brokered_service_context_space_name, .annotations.brokered_service_context_instance_name, .labels.backing_service_instance_guid ] | @tsv' |
+      while IFS=$'\t' read -r brokered_space_name brokered_organization_name brokered_instance_name backing_service_instance_guid; do
+        printf "$formatting" "$brokered_organization_name" "$brokered_space_name" "$brokered_instance_name" "$backing_service_instance_guid"
+      done
     echo
     echo "Hint: try \"cf_service_instance_from_guid backing_service_instance_guid\" to display details, or remove --summary option to enter interactive mode"
     return 0
@@ -230,7 +230,7 @@ EOF
   done
   if [[ -n "$current_org" && -n "$current_space" ]]; then
     #Restore initial target
-    cf t -o $current_org -s $current_space > /dev/null
+    cf t -o $current_org -s $current_space >/dev/null
   fi
 }
 export -f cf_services_from_selector
@@ -241,7 +241,7 @@ function cf_service_instance_from_guid() {
   local si=$1
   local skip_reverse_lookup_option=$2
   if [[ -z "${si}" || "${si}" == "-h" || -n $skip_reverse_lookup_option && $skip_reverse_lookup_option != "--skip-reverse-lookup" ]]; then
-  read -r -d '' USAGE <<'EOF'
+    read -r -d '' USAGE <<'EOF'
 NAME:
    cf_service_instance_from_guid - Look up a given service instance from its guid
 
@@ -256,27 +256,38 @@ EOF
     return 1
   fi
 
+  # validate guid is matching a service instance
+  local service_instance_entity=$(cf curl v2/service_instances/$si)
+  # '{
+  #   "description": "The service instance could not be found: 7c8efe65-d18c-4ec3-bc79-0b4629cb6e9fXX",
+  #   "error_code": "CF-ServiceInstanceNotFound",
+  #   "code": 60004
+  #}'
+  if [[ $(echo "${service_instance_entity}" | jq -r .error_code) != "null" ]]; then
+    echo "no service instance with guid= ${si}"
+    return 1
+  fi
 
-      cf curl v2/service_instances/$si | jq -r '.entity | [ .name, .space_guid, .last_operation.state, .last_operation.created_at, .space_url, .service_plan_url ] | @tsv' |
-      while IFS=$'\t' read -r service_instance_name space_guid state created_at space_url service_plan_url; do
-        #echo "service_instance_name=${service_instance_name} space_guid=${space_guid} state=${state} created_at=${created_at} space_url=${space_url} service_plan_url=${service_plan_url}"
-        cf curl ${space_url} | jq -r '.entity | [ .name, .organization_guid, .organization_url ] | @tsv' |
-          while IFS=$'\t' read -r space_name organization_guid organization_url; do
-            org_name=$(cf curl ${organization_url} | jq -r '.entity.name')
-#            echo "---------------------------------------------------------------------"
-#            echo "associated space:"
-#            echo "$ cf t -o $org_name -s $space_name"
-            cf t -o $org_name -s $space_name > /dev/null
-            if [[ -z "$skip_reverse_lookup_option" ]]; then
-              echo "$ cf service $service_instance_name --guid"
-              # as an optimization we fake this one
-              #cf service $service_instance_name --guid
-              echo "${si}"
-            fi
-            echo "$ cf service $service_instance_name"
-            cf service $service_instance_name
-          done;
-      done
+  echo "$service_instance_entity" | jq -r '.entity | [ .name, .space_guid, .last_operation.state, .last_operation.created_at, .space_url, .service_plan_url ] | @tsv' |
+    while IFS=$'\t' read -r service_instance_name space_guid state created_at space_url service_plan_url; do
+      #echo "service_instance_name=${service_instance_name} space_guid=${space_guid} state=${state} created_at=${created_at} space_url=${space_url} service_plan_url=${service_plan_url}"
+      cf curl ${space_url} | jq -r '.entity | [ .name, .organization_guid, .organization_url ] | @tsv' |
+        while IFS=$'\t' read -r space_name organization_guid organization_url; do
+          org_name=$(cf curl ${organization_url} | jq -r '.entity.name')
+          #            echo "---------------------------------------------------------------------"
+          #            echo "associated space:"
+          #            echo "$ cf t -o $org_name -s $space_name"
+          cf t -o $org_name -s $space_name >/dev/null
+          if [[ -z "$skip_reverse_lookup_option" ]]; then
+            echo "$ cf service $service_instance_name --guid"
+            # as an optimization we fake this one
+            #cf service $service_instance_name --guid
+            echo "${si}"
+          fi
+          echo "$ cf service $service_instance_name"
+          cf service $service_instance_name
+        done
+    done
 
 }
 export -f cf_service_instance_from_guid
