@@ -183,21 +183,39 @@ EOF
   local current_org=$(echo "$current_target" | grep org: | awk '{print $2}')
 
   local METADATAS_JSON=$(cf curl "/v3/service_instances?label_selector=${LABEL_SELECTOR}")
+
   # {
-  #            "labels": {
-  #               "brokered_service_instance_guid": "fe682093-d344-4251-862a-f31dee976012",
-  #               "brokered_service_context_organization_guid": "8ed390b9-8013-48d3-9669-2bddc308402a",
-  #               "brokered_service_originating_identity_user_id": "5402eaf9-d7dd-4baf-83e5-12a741ad48aa",
-  #               "brokered_service_context_space_guid": "ad5e9858-fba9-4bc2-994b-3024557d5044",
-  #               "backing_service_instance_guid": "cdbe1811-e1e9-45a7-b9b6-867ec7809b65"
-  #            },
-  #            "annotations": {
-  #               "brokered_service_context_instance_name": "instance-name",
-  #               "brokered_service_context_space_name": "space-name",
-  #               "brokered_service_api_info_location": "api.cloudfoundry.redacted-domain.com/v2/info",
-  #               "brokered_service_context_organization_name": "org-name"
-  #            }
-  # }
+  #   "errors": [
+  #      {
+  #         "detail": "The query parameter is invalid: Invalid label_selector value",
+  #         "title": "CF-BadQueryParameter",
+  #         "code": 10005
+  #      }
+  #   ]
+  #}
+  if [[ "$METADATAS_JSON" =~ "\"errors\"" ]]; then
+    echo "$METADATAS_JSON"
+    return 1
+  fi
+  #    "pagination": {
+  #      "total_results": 0,
+  #      "total_pages": 1,
+  #      "first": {
+  #         "href": "https://api.redacted-domain.org/v3/service_instances?label_selector=brokered_service_context_organization_guid%3D8ed390b9-8013-48d3-9669-2bddc3084&page=1&per_page=50"
+  #      },
+  #      "last": {
+  #         "href": "https://api.redacted-domain.org/v3/service_instances?label_selector=brokered_service_context_organization_guid%3D8ed390b9-8013-48d3-9669-2bddc3084&page=1&per_page=50"
+  #      },
+  #      "next": null,
+  #      "previous": null
+  #   },
+  #   "resources": []
+  #}'
+  if [[ $(echo "$METADATAS_JSON" | jq -r .pagination.total_results) -eq 0 ]]; then
+    echo "No result matching selector"
+#    echo "$METADATAS_JSON"
+    return 1
+  fi
 
   if [[ "$SUMMARY_OPTION" == "--summary" ]]; then
     local column_width="36"
@@ -205,9 +223,24 @@ EOF
     local formatting="| %-${column_width}s | %-${column_width}s | %-${column_width}s | %-${column_width}s | \n"
     printf "$formatting" "brokered_organization_name" "brokered_space_name" "brokered_instance_name" "backing_service_instance_guid"
     printf "$formatting" "--------------------------" "-------------------" "----------------------" "-----------------------------"
+    # {
+    #            "labels": {
+    #               "brokered_service_instance_guid": "fe682093-d344-4251-862a-f31dee976012",
+    #               "brokered_service_context_organization_guid": "8ed390b9-8013-48d3-9669-2bddc308402a",
+    #               "brokered_service_originating_identity_user_id": "5402eaf9-d7dd-4baf-83e5-12a741ad48aa",
+    #               "brokered_service_context_space_guid": "ad5e9858-fba9-4bc2-994b-3024557d5044",
+    #               "backing_service_instance_guid": "cdbe1811-e1e9-45a7-b9b6-867ec7809b65"
+    #            },
+    #            "annotations": {
+    #               "brokered_service_context_instance_name": "instance-name",
+    #               "brokered_service_context_space_name": "space-name",
+    #               "brokered_service_api_info_location": "api.cloudfoundry.redacted-domain.com/v2/info",
+    #               "brokered_service_context_organization_name": "org-name"
+    #            }
+    # }
     # See https://stackoverflow.com/a/43192740/1484823
     echo "$METADATAS_JSON" | jq -r '.resources[].metadata | [ .annotations.brokered_service_context_organization_name, .annotations.brokered_service_context_space_name, .annotations.brokered_service_context_instance_name, .labels.backing_service_instance_guid ] | @tsv' |
-      while IFS=$'\t' read -r brokered_space_name brokered_organization_name brokered_instance_name backing_service_instance_guid; do
+      while IFS=$'\t' read -r brokered_organization_name brokered_space_name brokered_instance_name backing_service_instance_guid; do
         printf "$formatting" "$brokered_organization_name" "$brokered_space_name" "$brokered_instance_name" "$backing_service_instance_guid"
       done
     echo
