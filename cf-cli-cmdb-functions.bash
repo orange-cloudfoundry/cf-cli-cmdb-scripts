@@ -179,8 +179,8 @@ EOF
 
   #Save current target to restore it afterwards
   local current_target=$(cf t)
-  local current_space=$(echo "$current_target" | grep space: | awk '{print $2}')
-  local current_org=$(echo "$current_target" | grep org: | awk '{print $2}')
+  local current_space=$(echo "$current_target" | awk '/space:/ {print $2}')
+  local   current_org=$(echo "$current_target" | awk '/org:/ {print $2}')
 
   local METADATAS_JSON=$(cf curl "/v3/service_instances?label_selector=${LABEL_SELECTOR}")
 
