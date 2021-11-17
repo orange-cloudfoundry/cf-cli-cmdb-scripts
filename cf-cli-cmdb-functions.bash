@@ -58,12 +58,12 @@ EOF
     printf "${USAGE}\n"
     return 1
   fi
-  MATCHING_AUDIT_EVENTS=$(cf curl "/v2/events?q=actee:${SERVICE_GUID}")
+  MATCHING_AUDIT_EVENTS=$(cf curl "/v3/audit_events?target_guids=${SERVICE_GUID}")
   # Jq does not properly allow controlling exit status, see https://github.com/stedolan/jq/issues/1142#issuecomment-372847390
   # so we test the output explicitly
-  if [[ $(echo "${MATCHING_AUDIT_EVENTS}" | jq .total_results) -gt 0 ]]; then
+  if [[ $(echo "${MATCHING_AUDIT_EVENTS}" | jq .pagination.total_results) -gt 0 ]]; then
     # Recompute the jq output to preserve color escapes
-    echo "Events for service guid ${SERVICE_GUID}:"
+    echo "Audit events for service guid ${SERVICE_GUID}:"
     echo "${MATCHING_AUDIT_EVENTS}" | jq .
     return 0
   else
@@ -86,7 +86,7 @@ NAME:
    cf_audit_events_from_service_name - List all audit events for a given service instance name
 
 USAGE:
-   cf_audit_events_from_service_name service_name
+   cf_audit_events_from_service_name service_instance_name
 
 EXAMPLES:
    cf_audit_events_from_service_name my-db
@@ -109,6 +109,45 @@ EOF
 
 }
 export -f cf_audit_events_from_service_name
+
+
+# $1: service name
+function cf_usage_events_from_service_name() {
+  #set -x
+
+  local SERVICE_NAME="$1"
+  if [[ -z "${SERVICE_NAME}" || "${SERVICE_NAME}" == "-h" ]]; then
+    read -r -d '' USAGE <<'EOF'
+NAME:
+   cf_usage_events_from_service_name - List all service events for a given service instance name
+
+USAGE:
+   cf_usage_events_from_service_name service_instance_name
+
+EXAMPLES:
+   cf_usage_events_from_service_name my-db
+EOF
+
+    printf "${USAGE}\n"
+    return 1
+  fi
+
+  MATCHING_USAGE_EVENTS=$(cf curl '/v3/service_usage_events?per_page=5000' | jq ".resources[] | select(.service_instance.name | contains(\"${SERVICE_NAME}\"))")
+  # Jq does not properly allow controlling exit status, see https://github.com/stedolan/jq/issues/1142#issuecomment-372847390
+  # so we test the output explicitly
+  if [[ $(echo "${MATCHING_USAGE_EVENTS}" | jq length) -gt 0 ]]; then
+    # Recompute the jq output to preserve color escapes
+    echo "Usage events for service guid ${SERVICE_GUID} (client filtered from last 5,000 last usage events):"
+    echo "${MATCHING_USAGE_EVENTS}" | jq .
+    return 0
+  else
+    echo "No usage events defined for service name ${SERVICE_NAME} among last 5,000 last usage events. Hint: did they expire and were purged ? Check service instance status date."
+    return 1
+  fi
+  #set +x
+
+}
+export -f cf_usage_events_from_service_name
 
 # $1: service name
 function cf_service_details() {
@@ -136,6 +175,7 @@ EOF
   cf_labels_service $SERVICE_NAME
   echo
   cf_audit_events_from_service_name $SERVICE_NAME
+  cf_usage_events_from_service_name $SERVICE_NAME
   echo
 }
 export -f cf_service_details
@@ -393,7 +433,7 @@ EOF
 
   printf "${USAGE}\n"
 
-  local cmdb_functions="cf_audit_events_from_guid cf_audit_events_from_service_name cf_labels_service cf_service_details cf_service_instance_from_guid cf_services_from_selector cf_org_space_hierarchy"
+  local cmdb_functions="cf_audit_events_from_guid cf_audit_events_from_service_name cf_usage_events_from_service_name cf_labels_service cf_service_details cf_service_instance_from_guid cf_services_from_selector cf_org_space_hierarchy"
   for f in $cmdb_functions; do
     $f -h | grep -A1 "NAME:" | grep -v "NAME:"
   done
